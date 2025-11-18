@@ -1,19 +1,17 @@
 // 선택 가능한 최대 패턴 수
 const MAX_SELECTION = 5;
 
-// (추가) 선택 가능한 JSON 세트 정의
-// file: 실제 JSON 파일명, label: 셀렉트 박스에 표시될 이름
+// 선택 가능한 JSON 세트 정의 (파일명은 실제 파일에 맞게 수정)
 const DATASETS = [
     { file: 'patterns_book1.json', label: 'Book 1 – 기본 패턴' },
     { file: 'patterns_book2.json', label: 'Book 2 – 감정 표현' }
-    // 필요에 따라 계속 추가
     // { file: 'patterns_book3.json', label: 'Book 3 – 장소 / 시간' },
 ];
 
-// 현재 선택된 데이터셋 파일명 (백엔드로 함께 보내고 싶을 때 사용)
+// 현재 선택된 데이터셋 파일명
 let currentDatasetFile = null;
 
-// 패턴 데이터(패턴 번호, 이름 등)
+// 패턴 데이터
 let patternsData = [];
 
 // DOM 요소 참조
@@ -24,49 +22,43 @@ const message = document.getElementById('message');
 const btnDeselect = document.getElementById('btnDeselect');
 const datasetSelect = document.getElementById('datasetSelect');
 
-// 초기화: DOMContentLoaded 시
+// 초기화
 document.addEventListener('DOMContentLoaded', () => {
-    // 1) 데이터셋 셀렉트 박스 옵션 채우기
     initDatasetSelect();
 
-    // 2) 기본으로 첫 번째 세트 로딩
     if (DATASETS.length > 0) {
         const firstFile = DATASETS[0].file;
         currentDatasetFile = firstFile;
         loadPatternsFromJson(firstFile);
     }
 
-    // 3) 버튼 이벤트
     btnDeselect.addEventListener('click', deselectAll);
     generateBtn.addEventListener('click', generateWorksheet);
 
-    // 4) 제목(세트) 변경 시 해당 JSON 재로딩
     datasetSelect.addEventListener('change', () => {
         const file = datasetSelect.value;
         currentDatasetFile = file;
-        deselectAll(); // 세트 바꾸면 선택 초기화
+        deselectAll();
         loadPatternsFromJson(file);
     });
 });
 
 /**
- * (추가) 데이터셋 셀렉트 박스 옵션 초기화
+ * 데이터셋 셀렉트 박스 옵션 초기화
  */
 function initDatasetSelect() {
-    // 혹시 HTML에 직접 넣어둔 옵션이 있다면 비워줌
     datasetSelect.innerHTML = '';
 
     DATASETS.forEach(ds => {
         const option = document.createElement('option');
-        option.value = ds.file;      // 실제 JSON 파일명
-        option.textContent = ds.label; // 화면에 보이는 이름
+        option.value = ds.file;
+        option.textContent = ds.label;
         datasetSelect.appendChild(option);
     });
 }
 
 /**
- * 정적 JSON 파일에서 패턴 데이터 로딩
- * jsonFileName: 예) 'patterns_book1.json'
+ * JSON에서 패턴 데이터 로딩
  */
 async function loadPatternsFromJson(jsonFileName) {
     try {
@@ -80,7 +72,6 @@ async function loadPatternsFromJson(jsonFileName) {
         const data = await response.json();
         patternsData = data;
 
-        // 번호 기준 정렬 후 렌더링
         patternsData.sort((a, b) => a.number - b.number);
         renderPatternGrid(patternsData);
 
@@ -113,12 +104,10 @@ function renderPatternGrid(patterns) {
 
         const checkbox = div.querySelector('input[type="checkbox"]');
 
-        // 카드 클릭 시 체크박스 토글 (체크박스 자체 클릭은 예외)
         div.addEventListener('click', (e) => {
             if (e.target.type === 'checkbox') return;
             if (div.classList.contains('disabled')) return;
 
-            // 선택 제한 체크
             if (!checkbox.checked && getSelectedCount() >= MAX_SELECTION) {
                 showMessage(`최대 ${MAX_SELECTION}개까지만 선택할 수 있습니다.`, 'error');
                 return;
@@ -128,7 +117,6 @@ function renderPatternGrid(patterns) {
             handleCheckboxChange(checkbox);
         });
 
-        // 체크박스 직접 클릭 시 처리
         checkbox.addEventListener('change', () => handleCheckboxChange(checkbox));
 
         patternGrid.appendChild(div);
@@ -151,14 +139,14 @@ function handleCheckboxChange(checkbox) {
 }
 
 /**
- * 현재 선택된 패턴 수 반환
+ * 현재 선택된 패턴 수
  */
 function getSelectedCount() {
     return document.querySelectorAll('.pattern-item input[type="checkbox"]:checked').length;
 }
 
 /**
- * 선택 수에 따라 disabled 및 selected 클래스 업데이트
+ * disabled / selected 상태 업데이트
  */
 function updateDisabledState() {
     const selectedCount = getSelectedCount();
@@ -192,7 +180,7 @@ function deselectAll() {
 }
 
 /**
- * 상단 선택 개수 텍스트 업데이트
+ * 선택 카운트 텍스트 업데이트
  */
 function updateSelectionCount() {
     const selected = getSelectedCount();
@@ -202,10 +190,7 @@ function updateSelectionCount() {
 }
 
 /**
- * 워크시트 생성 요청
- * - 선택한 패턴 번호 배열을 서버의 /generate 로 POST
- * - 응답 blob을 파일로 다운로드
- * - 서버에서 PDF 또는 Word(docx)를 생성하도록 구현 필요
+ * 워크시트 생성 (브라우저 안에서 docx 생성)
  */
 async function generateWorksheet() {
     const selectedPatterns = Array.from(
@@ -219,45 +204,100 @@ async function generateWorksheet() {
 
     try {
         generateBtn.disabled = true;
-        showMessage('워크시트 생성 중...', 'success');
+        showMessage('워크시트(docx) 생성 중...', 'success');
 
-        const bodyData = {
-            patterns: selectedPatterns
-        };
+        // docx 라이브러리에서 객체 가져오기
+        const { Document, Packer, Paragraph, TextRun, HeadingLevel } = docx;
 
-        // (선택) 현재 선택된 데이터셋 파일명을 백엔드에 같이 보내고 싶다면
-        if (currentDatasetFile) {
-            bodyData.datasetFile = currentDatasetFile;
-        }
+        const children = [];
 
-        const response = await fetch('/generate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(bodyData)
+        selectedPatterns.forEach((num, idx) => {
+            const pattern = patternsData.find(p => p.number === num);
+            if (!pattern) return;
+
+            // 패턴 제목 (헤딩)
+            children.push(
+                new Paragraph({
+                    text: `Pattern ${pattern.number}. ${pattern.name}`,
+                    heading: HeadingLevel.HEADING_2,
+                    spacing: { after: 300 }
+                })
+            );
+
+            // Unscramble 섹션 문항만 사용 (필요하면 Speaking 문항도 나중에 추가)
+            const unscrambleItems =
+                (pattern.sections && pattern.sections['Unscramble']) || [];
+
+            unscrambleItems.forEach((q, qIndex) => {
+                const qNum = qIndex + 1;
+                const scrambledText = q.scrambled ? ` (${q.scrambled})` : '';
+
+                // 1) 문장 줄: "1. 나는 doll를 원해 (I / a / want / doll)"
+                children.push(
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: `${qNum}. ${q.koreanOrQuestion}${scrambledText}`,
+                                size: 24 // 12pt
+                            })
+                        ],
+                        spacing: {
+                            after: 120 // 문장 바로 아래 간격
+                        }
+                    })
+                );
+
+                // 2) 밑줄 줄: 문장과의 간격을 넓게 (기존 대비 50% 이상)
+                children.push(
+                    new Paragraph({
+                        border: {
+                            bottom: {
+                                color: '000000',
+                                space: 1,
+                                value: 'single',
+                                size: 8
+                            }
+                        },
+                        spacing: {
+                            after: 260 // ✅ 여기서 간격을 넉넉하게 줌 (글씨 쓰기 좋게)
+                        }
+                    })
+                );
+            });
+
+            // 패턴 사이 여백
+            children.push(new Paragraph({ text: '' }));
         });
 
-        if (!response.ok) {
-            const result = await response.json().catch(() => ({}));
-            const errorText = result.error || '알 수 없는 오류가 발생했습니다.';
-            showMessage('오류: ' + errorText, 'error');
-            return;
-        }
+        const doc = new Document({
+            sections: [
+                {
+                    properties: {},
+                    children
+                }
+            ]
+        });
 
-        const blob = await response.blob();
+        const blob = await Packer.toBlob(doc);
+
+        const fileBase =
+            (currentDatasetFile ? currentDatasetFile.replace('.json', '') : 'worksheet') +
+            `_patterns_${selectedPatterns.join('_')}`;
+
+        const fileName = `${fileBase}.docx`;
+
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-
-        // 서버에서 PDF를 만들면 .pdf, 워드를 만들면 .docx 로 확장자만 바꿔 사용
-        a.download = `Worksheet_Patterns_${selectedPatterns.join('_')}_${new Date().toISOString().split('T')[0]}.docx`;
-
+        a.download = fileName;
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
 
-        showMessage(`✅ 워크시트 생성 완료! (패턴 ${selectedPatterns.length}개)`, 'success');
+        showMessage(`✅ 워크시트 생성 완료! (${fileName})`, 'success');
     } catch (error) {
+        console.error(error);
         showMessage('생성 실패: ' + error.message, 'error');
     } finally {
         generateBtn.disabled = false;
@@ -266,15 +306,12 @@ async function generateWorksheet() {
 
 /**
  * 메시지 출력 유틸
- * @param {string} text - 출력할 메시지
- * @param {'success'|'error'} type - 메시지 유형
  */
 function showMessage(text, type) {
     message.textContent = text;
     message.className = 'message ' + type;
     message.style.display = 'block';
 
-    // 성공 메시지는 3초 후 자동 숨김
     if (type === 'success') {
         setTimeout(() => {
             message.style.display = 'none';
