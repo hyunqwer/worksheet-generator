@@ -190,7 +190,8 @@ function updateSelectionCount() {
 }
 
 /**
- * 워크시트 생성 (브라우저 안에서 docx 생성)
+ * 워크시트 생성 (예전 PDF 레이아웃 그대로 docx로 재현)
+ * - 선택한 각 패턴마다 1페이지씩 생성 (Weekly Test 양식)
  */
 async function generateWorksheet() {
     const selectedPatterns = Array.from(
@@ -207,48 +208,187 @@ async function generateWorksheet() {
         showMessage('워크시트(docx) 생성 중...', 'success');
 
         // docx 라이브러리에서 객체 가져오기
-        const { Document, Packer, Paragraph, TextRun, HeadingLevel } = docx;
+        const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, PageBreak } = docx;
 
-        const children = [];
+        const allChildren = [];
 
-        selectedPatterns.forEach((num, idx) => {
+        selectedPatterns.forEach((num, index) => {
             const pattern = patternsData.find(p => p.number === num);
             if (!pattern) return;
 
-            // 패턴 제목 (헤딩)
-            children.push(
+            const patternNumber = pattern.number;
+            const patternName = pattern.name || '';
+
+            // 1) 상단 헤더 영역
+            // Weekly Test (가운데, 크게)
+            allChildren.push(
                 new Paragraph({
-                    text: `Pattern ${pattern.number}. ${pattern.name}`,
-                    heading: HeadingLevel.HEADING_2,
-                    spacing: { after: 300 }
+                    text: 'Weekly Test',
+                    heading: HeadingLevel.TITLE,
+                    alignment: AlignmentType.CENTER,
+                    spacing: { after: 200 }
                 })
             );
 
-            // Unscramble 섹션 문항만 사용 (필요하면 Speaking 문항도 나중에 추가)
+            // Pattern Level A - Patterns: 14, 3, 5,... (선택 패턴 번호 표시)
+            allChildren.push(
+                new Paragraph({
+                    children: [
+                        new TextRun({
+                            text: `Pattern Level A - Patterns: ${patternNumber}`,
+                            bold: true
+                        })
+                    ],
+                    alignment: AlignmentType.CENTER,
+                    spacing: { after: 200 }
+                })
+            );
+
+            // NAME: _______________________________
+            allChildren.push(
+                new Paragraph({
+                    children: [
+                        new TextRun({
+                            text: 'NAME: _______________________________',
+                            size: 24
+                        })
+                    ],
+                    spacing: { after: 100 }
+                })
+            );
+
+            // DATE: _____ / _____
+            allChildren.push(
+                new Paragraph({
+                    children: [
+                        new TextRun({
+                            text: 'DATE: _____ / _____',
+                            size: 24
+                        })
+                    ],
+                    spacing: { after: 200 }
+                })
+            );
+
+            // 2) Speaking I - Answer the questions (고정 문구)
+            allChildren.push(
+                new Paragraph({
+                    children: [
+                        new TextRun({
+                            text: '■ Speaking I - Answer the questions',
+                            bold: true
+                        })
+                    ],
+                    spacing: { after: 100 }
+                })
+            );
+
+            allChildren.push(
+                new Paragraph({
+                    children: [
+                        new TextRun({
+                            text: 'PATTERN',
+                            bold: true
+                        })
+                    ],
+                    spacing: { after: 100 }
+                })
+            );
+
+            const speakingIPrompts = [
+                '1. Practice pattern',
+                '2. Make sentence',
+                '3. Use pattern',
+                '4. Try',
+                '5. Can you answer?'
+            ];
+
+            speakingIPrompts.forEach(line => {
+                allChildren.push(
+                    new Paragraph({
+                        children: [new TextRun({ text: line, size: 24 })],
+                        spacing: { after: 80 }
+                    })
+                );
+            });
+
+            allChildren.push(new Paragraph({ text: '', spacing: { after: 200 } }));
+
+            // 3) Speaking II - Say in English
+            allChildren.push(
+                new Paragraph({
+                    children: [
+                        new TextRun({
+                            text: '■ Speaking II - Say in English',
+                            bold: true
+                        })
+                    ],
+                    spacing: { after: 100 }
+                })
+            );
+
+            const speaking2Items =
+                (pattern.sections && pattern.sections['Speaking II']) || [];
+
+            // 상위 5개만 사용
+            for (let i = 0; i < 5; i++) {
+                let lineText;
+                if (speaking2Items[i]) {
+                    lineText = `${i + 1}. ${speaking2Items[i].koreanOrQuestion}`;
+                } else {
+                    // 데이터가 부족한 경우 placeholder
+                    lineText = `${i + 1}. Pattern ${i + 1}`;
+                }
+
+                allChildren.push(
+                    new Paragraph({
+                        children: [new TextRun({ text: lineText, size: 24 })],
+                        spacing: { after: 80 }
+                    })
+                );
+            }
+
+            allChildren.push(new Paragraph({ text: '', spacing: { after: 200 } }));
+
+            // 4) Unscramble
+            allChildren.push(
+                new Paragraph({
+                    children: [
+                        new TextRun({
+                            text: '■ Unscramble',
+                            bold: true
+                        })
+                    ],
+                    spacing: { after: 100 }
+                })
+            );
+
             const unscrambleItems =
                 (pattern.sections && pattern.sections['Unscramble']) || [];
 
-            unscrambleItems.forEach((q, qIndex) => {
-                const qNum = qIndex + 1;
+            for (let i = 0; i < 5; i++) {
+                const q = unscrambleItems[i];
+                if (!q) continue;
+
                 const scrambledText = q.scrambled ? ` (${q.scrambled})` : '';
 
-                // 1) 문장 줄: "1. 나는 doll를 원해 (I / a / want / doll)"
-                children.push(
+                // 문장 줄
+                allChildren.push(
                     new Paragraph({
                         children: [
                             new TextRun({
-                                text: `${qNum}. ${q.koreanOrQuestion}${scrambledText}`,
-                                size: 24 // 12pt
+                                text: `${i + 1}. ${q.koreanOrQuestion}${scrambledText}`,
+                                size: 24
                             })
                         ],
                         spacing: {
-                            after: 120 // 문장 바로 아래 간격
+                            after: 120
                         }
                     })
                 );
 
-                // 2) 밑줄 줄: 문장과의 간격을 넓게 (기존 대비 50% 이상)
-                children.push(
+                // 밑줄 줄 (글씨 쓰는 공간) - 기존보다 약 50% 이상 넓게
+                allChildren.push(
                     new Paragraph({
                         border: {
                             bottom: {
@@ -259,21 +399,56 @@ async function generateWorksheet() {
                             }
                         },
                         spacing: {
-                            after: 260 // ✅ 여기서 간격을 넉넉하게 줌 (글씨 쓰기 좋게)
+                            after: 260 // ✅ 여기 간격으로 필기 공간 확보
                         }
                     })
                 );
-            });
+            }
 
-            // 패턴 사이 여백
-            children.push(new Paragraph({ text: '' }));
+            allChildren.push(new Paragraph({ text: '', spacing: { after: 200 } }));
+
+            // 5) GRADE / REMARK
+            allChildren.push(
+                new Paragraph({
+                    children: [
+                        new TextRun({
+                            text: 'GRADE:',
+                            bold: true,
+                            size: 24
+                        })
+                    ],
+                    spacing: { after: 120 }
+                })
+            );
+
+            allChildren.push(
+                new Paragraph({
+                    children: [
+                        new TextRun({
+                            text: 'REMARK:',
+                            bold: true,
+                            size: 24
+                        })
+                    ],
+                    spacing: { after: 200 }
+                })
+            );
+
+            // 여러 패턴을 선택한 경우 페이지 나누기
+            if (index !== selectedPatterns.length - 1) {
+                allChildren.push(
+                    new Paragraph({
+                        children: [new PageBreak()]
+                    })
+                );
+            }
         });
 
         const doc = new Document({
             sections: [
                 {
                     properties: {},
-                    children
+                    children: allChildren
                 }
             ]
         });
