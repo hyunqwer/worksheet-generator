@@ -10,6 +10,9 @@
 
     <!-- 스타일시트 -->
     <link rel="stylesheet" href="style.css">
+
+    <!-- ✅ 추가: 브라우저에서 Word(docx) 파일 생성용 라이브러리 -->
+    <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
 </head>
 <body>
     <div class="container">
@@ -18,7 +21,7 @@
         <!-- 패턴 선택 영역 -->
         <section class="pattern-section">
 
-            <!-- (추가) 데이터셋 / 제목 선택 영역 -->
+            <!-- 데이터셋 / 제목 선택 -->
             <div class="dataset-select-wrapper">
                 <label for="datasetSelect" class="pattern-label-title">
                     워크시트 제목 선택
