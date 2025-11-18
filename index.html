@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>영어 패턴 워크시트 생성기</title>
+
+    <!-- 스타일시트 -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🎓 영어 패턴 워크시트 생성기</h1>
+
+        <!-- 패턴 선택 영역 -->
+        <section class="pattern-section">
+
+            <!-- (추가) 데이터셋 / 제목 선택 영역 -->
+            <div class="dataset-select-wrapper">
+                <label for="datasetSelect" class="pattern-label-title">
+                    워크시트 제목 선택
+                </label>
+                <select id="datasetSelect" class="dataset-select">
+                    <!-- 옵션은 app.js에서 자동으로 채워집니다 -->
+                </select>
+            </div>
+
+            <label class="pattern-label-title">패턴 선택 (최대 5개)</label>
+            <div class="tip">
+                💡 원하는 패턴을 클릭하여 선택하세요. (최대 5개까지 선택 가능합니다)
+            </div>
+
+            <div class="selection-info" id="selectionInfo">
+                선택된 패턴: 0개 / 최대 5개
+            </div>
+
+            <button class="btn-deselect" id="btnDeselect">
+                전체 해제
+            </button>
+
+            <div class="pattern-grid" id="patternGrid">
+                <!-- 패턴 카드가 JS로 렌더링됩니다 -->
+            </div>
+        </section>
+
+        <!-- 워크시트 생성 버튼 -->
+        <button class="btn-generate" id="generateBtn">
+            📄 워크시트 생성
+        </button>
+
+        <!-- 메시지 영역 -->
+        <div class="message" id="message"></div>
+    </div>
+
+    <!-- 스크립트 -->
+    <script src="app.js" defer></script>
+</body>
+</html>
