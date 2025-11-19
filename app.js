@@ -190,10 +190,6 @@ function updateSelectionCount() {
 }
 
 /**
- * 워크시트 생성 (예전 PDF 레이아웃 그대로 docx로 재현)
- * - 선택한 각 패턴마다 1페이지씩 생성 (Weekly Test 양식)
- */
-/**
  * 워크시트 생성 (선택한 패턴들을 1장짜리 시트로 조합)
  * - Speaking I: 고정 5문항
  * - Speaking II: 선택한 패턴들의 Speaking II 문장을 앞에서부터 5개까지 채움
@@ -493,6 +489,7 @@ async function generateWorksheet() {
         generateBtn.disabled = false;
     }
 }
+
 
 /**
  * 메시지 출력 유틸
