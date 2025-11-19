@@ -189,18 +189,88 @@ function updateSelectionCount() {
     updateDisabledState();
 }
 
+
 /**
- * 워크시트 생성 (선택한 패턴들을 1장짜리 시트로 조합)
- * - Speaking I: 고정 5문항
- * - Speaking II: 선택한 패턴들의 Speaking II 문장을 앞에서부터 5개까지 채움
- * - Unscramble: 선택한 패턴들의 Unscramble 문항을 앞에서부터 5개까지 채움
+ * Python 버전 distribute_questions와 동일한 방식으로
+ * speaking1, speaking2, unscramble 문항을 분배한다.
+ *
+ * @param {Array} selectedPatternObjects - 선택된 패턴 객체 배열
+ * @param {number} targetCount - 섹션별 목표 문항 수 (기본 5)
+ * @returns {{speaking1: string[], speaking2: string[], unscramble: Array}}
+ */
+function distributeQuestionsJS(selectedPatternObjects, targetCount = 5) {
+    const result = {
+        speaking1: [],
+        speaking2: [],
+        unscramble: []
+    };
+
+    const patternCount = selectedPatternObjects.length;
+    if (patternCount === 0) return result;
+
+    const itemsPerPattern = Math.floor(targetCount / patternCount);
+    const remainder = targetCount % patternCount;
+
+    // 각 섹션별로 동일한 로직 적용
+    ['speaking1', 'speaking2', 'unscramble'].forEach(sectionKey => {
+        const collected = [];
+
+        selectedPatternObjects.forEach((pattern, idx) => {
+            const sections = pattern.sections || {};
+            let items = [];
+
+            // JSON의 섹션 이름을 JS용 키로 매핑
+            if (sectionKey === 'speaking1') {
+                items = sections['Speaking I'] || [];
+            } else if (sectionKey === 'speaking2') {
+                items = sections['Speaking II'] || [];
+            } else if (sectionKey === 'unscramble') {
+                items = sections['Unscramble'] || [];
+            }
+
+            const takeCount = itemsPerPattern + (idx < remainder ? 1 : 0);
+            if (takeCount <= 0 || items.length === 0) return;
+
+            // JSON 구조에 맞게 필요한 필드만 추출
+            if (sectionKey === 'unscramble') {
+                // { koreanOrQuestion, scrambled } 구조로 저장
+                items.slice(0, takeCount).forEach(q => {
+                    collected.push({
+                        koreanOrQuestion: q.koreanOrQuestion || '',
+                        scrambled: q.scrambled || ''
+                    });
+                });
+            } else {
+                // speaking1 / speaking2 는 텍스트만 필요
+                items.slice(0, takeCount).forEach(q => {
+                    // q가 문자열일 수도 있고 객체일 수도 있다고 가정
+                    if (typeof q === 'string') {
+                        collected.push(q);
+                    } else {
+                        collected.push(q.koreanOrQuestion || '');
+                    }
+                });
+            }
+        });
+
+        // 최종적으로 targetCount까지만 사용
+        result[sectionKey] = collected.slice(0, targetCount);
+    });
+
+    return result;
+}
+
+/**
+ * 워크시트 생성 (기존 Flask 버전과 동일한 문항 분배 로직 사용)
+ * - Speaking I / II / Unscramble 모두 distributeQuestionsJS로 분배
+ * - 선택한 패턴은 1장짜리 시트에 조합
  */
 async function generateWorksheet() {
-    const selectedPatterns = Array.from(
+    const selectedPatternNumbers = Array.from(
         document.querySelectorAll('.pattern-item input[type="checkbox"]:checked')
     ).map(cb => parseInt(cb.value, 10));
 
-    if (selectedPatterns.length === 0) {
+    if (selectedPatternNumbers.length === 0) {
         showMessage('최소 1개 이상의 패턴을 선택해 주세요.', 'error');
         return;
     }
@@ -209,37 +279,27 @@ async function generateWorksheet() {
         generateBtn.disabled = true;
         showMessage('워크시트(docx) 생성 중...', 'success');
 
-        // 패턴 번호 정렬
-        const selectedSorted = [...selectedPatterns].sort((a, b) => a - b);
+        // 번호 정렬
+        const selectedSorted = [...selectedPatternNumbers].sort((a, b) => a - b);
+
+        // 선택된 패턴 객체 추출
+        const selectedPatternObjects = selectedSorted
+            .map(num => patternsData.find(p => p.number === num))
+            .filter(Boolean);
+
+        if (selectedPatternObjects.length === 0) {
+            showMessage('선택한 패턴 데이터를 찾을 수 없습니다.', 'error');
+            return;
+        }
+
+        // Python distribute_questions와 동일한 방식으로 문항 분배
+        const distributed = distributeQuestionsJS(selectedPatternObjects, 5);
+        const speaking1List = distributed.speaking1;      // string[]
+        const speaking2List = distributed.speaking2;      // string[]
+        const unscrambleList = distributed.unscramble;    // {koreanOrQuestion, scrambled}[]
 
         // docx 객체
         const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = docx;
-
-        // Speaking II / Unscramble 문항 풀 만들기
-        const speaking2Pool = [];
-        const unscramblePool = [];
-
-        selectedSorted.forEach(num => {
-            const pattern = patternsData.find(p => p.number === num);
-            if (!pattern || !pattern.sections) return;
-
-            const s2 = pattern.sections['Speaking II'] || [];
-            s2.forEach(item => {
-                speaking2Pool.push({
-                    patternNumber: num,
-                    text: item.koreanOrQuestion || ''
-                });
-            });
-
-            const uns = pattern.sections['Unscramble'] || [];
-            uns.forEach(item => {
-                unscramblePool.push({
-                    patternNumber: num,
-                    koreanOrQuestion: item.koreanOrQuestion || '',
-                    scrambled: item.scrambled || ''
-                });
-            });
-        });
 
         const children = [];
 
@@ -293,12 +353,12 @@ async function generateWorksheet() {
             })
         );
 
-        // 2) Speaking I - 고정 문항
+        // 2) Speaking I - Answer the questions
         children.push(
             new Paragraph({
                 children: [
                     new TextRun({
-                        text: '■ Speaking I - Answer the questions',
+                        text: '◈ Speaking I - Answer the questions',
                         bold: true
                     })
                 ],
@@ -318,18 +378,16 @@ async function generateWorksheet() {
             })
         );
 
-        const speakingIPrompts = [
-            '1. Practice pattern',
-            '2. Make sentence',
-            '3. Use pattern',
-            '4. Try',
-            '5. Can you answer?'
-        ];
-
-        speakingIPrompts.forEach(line => {
+        // Speaking I 문항 (분배된 speaking1List 사용)
+        speaking1List.forEach((qText, idx) => {
             children.push(
                 new Paragraph({
-                    children: [new TextRun({ text: line, size: 24 })],
+                    children: [
+                        new TextRun({
+                            text: `${idx + 1}. ${qText}`,
+                            size: 24
+                        })
+                    ],
                     spacing: { after: 80 }
                 })
             );
@@ -337,12 +395,41 @@ async function generateWorksheet() {
 
         children.push(new Paragraph({ text: '', spacing: { after: 200 } }));
 
-        // 3) Speaking II - 선택한 패턴들의 문장 조합 (최대 5문항)
+        // 3) Speaking II - Say in English
         children.push(
             new Paragraph({
                 children: [
                     new TextRun({
-                        text: '■ Speaking II - Say in English',
+                        text: '◈ Speaking II - Say in English',
+                        bold: true
+                    })
+                ],
+                spacing: { after: 100 }
+            })
+        );
+
+        speaking2List.forEach((korean, idx) => {
+            children.push(
+                new Paragraph({
+                    children: [
+                        new TextRun({
+                            text: `${idx + 1}. ${korean}`,
+                            size: 24
+                        })
+                    ],
+                    spacing: { after: 80 }
+                })
+            );
+        });
+
+        children.push(new Paragraph({ text: '', spacing: { after: 200 } }));
+
+        // 4) Speaking III - With your teacher (기존 레이아웃 그대로)
+        children.push(
+            new Paragraph({
+                children: [
+                    new TextRun({
+                        text: '◈ Speaking III - With your teacher',
                         bold: true
                     })
                 ],
@@ -351,19 +438,14 @@ async function generateWorksheet() {
         );
 
         for (let i = 0; i < 5; i++) {
-            const item = speaking2Pool[i];
-            let lineText;
-            if (item) {
-                // 패턴 번호 표시를 하고 싶으면 [P14] 등 붙이기
-                lineText = `${i + 1}. ${item.text}`;
-            } else {
-                // 문항이 부족할 때는 빈 줄로 처리
-                lineText = `${i + 1}. __________________________`;
-            }
-
             children.push(
                 new Paragraph({
-                    children: [new TextRun({ text: lineText, size: 24 })],
+                    children: [
+                        new TextRun({
+                            text: `${i + 1}. Pattern ${i + 1}`,
+                            size: 24
+                        })
+                    ],
                     spacing: { after: 80 }
                 })
             );
@@ -371,12 +453,12 @@ async function generateWorksheet() {
 
         children.push(new Paragraph({ text: '', spacing: { after: 200 } }));
 
-        // 4) Unscramble - 선택한 패턴들의 문항 조합 (최대 5문항)
+        // 5) Unscramble
         children.push(
             new Paragraph({
                 children: [
                     new TextRun({
-                        text: '■ Unscramble',
+                        text: '◈ Unscramble',
                         bold: true
                     })
                 ],
@@ -384,21 +466,15 @@ async function generateWorksheet() {
             })
         );
 
-        for (let i = 0; i < 5; i++) {
-            const q = unscramblePool[i];
-            if (!q) {
-                // 부족하면 더 이상 안 채움
-                break;
-            }
-
+        unscrambleList.forEach((q, idx) => {
             const scrambledText = q.scrambled ? ` (${q.scrambled})` : '';
 
-            // 문장 줄
+            // 문제 줄
             children.push(
                 new Paragraph({
                     children: [
                         new TextRun({
-                            text: `${i + 1}. ${q.koreanOrQuestion}${scrambledText}`,
+                            text: `${idx + 1}. ${q.koreanOrQuestion}${scrambledText}`,
                             size: 24
                         })
                     ],
@@ -408,7 +484,7 @@ async function generateWorksheet() {
                 })
             );
 
-            // 밑줄 줄 (쓰기 공간) – 넉넉하게
+            // 밑줄 줄 (쓰기 공간)
             children.push(
                 new Paragraph({
                     border: {
@@ -424,11 +500,11 @@ async function generateWorksheet() {
                     }
                 })
             );
-        }
+        });
 
         children.push(new Paragraph({ text: '', spacing: { after: 200 } }));
 
-        // 5) GRADE / REMARK
+        // 6) GRADE / REMARK
         children.push(
             new Paragraph({
                 children: [
@@ -455,7 +531,7 @@ async function generateWorksheet() {
             })
         );
 
-        // 👉 전체를 1개 섹션(=1장의 시트)로만 구성
+        // 한 장짜리 섹션
         const doc = new Document({
             sections: [
                 {
